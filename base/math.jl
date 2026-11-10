@@ -998,6 +998,22 @@ function exponent(x::Bool)
     end
 end
 
+function exponent(x::Rational)
+    n = numerator(x)
+    d = denominator(x)
+    iszero(n) && throw(DomainError(x, "cannot be zero"))
+    iszero(d) && throw(DomainError(x, "Cannot be NaN or Inf."))
+    # floor(log2(|n/d|)) is exponent(|n|) - exponent(|d|), or one less when
+    # |n| < |d| * 2^e. `|n| < |d|` is not that test: 5//3 and 3//5 differ.
+    # Shifts stay exact for BitInteger values because the distance between
+    # the two exponents is smaller than the width of the integer.
+    e = exponent(n) - exponent(d)
+    an = Base.uabs(n)
+    ad = Base.uabs(d)
+    pow2_le = e >= 0 ? ad <= (an >> e) : ad <= (an << -e)
+    return pow2_le ? e : e - 1
+end
+
 """
     significand(x)
 
