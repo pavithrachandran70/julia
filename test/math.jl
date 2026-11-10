@@ -235,6 +235,48 @@ end
             @test ldexp(prevfloat(T(1)), -p-1) === zero(T)
         end
     end
+
+    @testset "Rational" begin
+        # floor(log2(abs(q))) via integers, including values Float64 rounds to a power of two
+        # Int64, so this is the same value on 32-bit where `2^60` overflows `Int`
+        q = (Int64(2)^60 - 1) // Int64(2)^60
+        @test exponent(q) == -1
+        # `2^e` is not defined for a negative `Int` exponent; compare the rational power of two.
+        @test (2//1)^exponent(q) <= q < (2//1)^(exponent(q) + 1)
+        @test exponent(1//1) == 0
+        @test exponent(2//1) == 1
+        @test exponent(5//3) == 0
+        @test exponent(3//5) == -1
+        @test exponent(-5//3) == 0
+        @test exponent(-1//4) == -2
+        @test_throws DomainError exponent(0//1)
+        @test_throws DomainError exponent(1//0)
+        @test_throws DomainError exponent(-1//0)
+
+        # 2^e <= abs(x) < 2^(e+1), compared with BigInt so large exponents do not overflow.
+        function exponent_holds(x)
+            e = exponent(x)
+            n = abs(BigInt(numerator(x)))
+            d = abs(BigInt(denominator(x)))
+            if e >= 0
+                return (d << e) <= n < (d << (e + 1))
+            else
+                return d <= (n << -e) < (d << 1)
+            end
+        end
+        for x in (q, 1//1, 2//1, 3//2, 5//3, 3//5, 7//5, 8//3, 9//13,
+                  -(5//3), -1//4, typemin(Int)//1, typemin(Int)//3,
+                  (big(2)^100 - 1)//big(2)^100, big(2)^100//(big(2)^100 - 1))
+            @test exponent_holds(x)
+        end
+        for T in (Int8, UInt8, Int64, UInt64, Int128, UInt128)
+            nums = T <: Signed ? (typemin(T), T(-3), T(-1), T(1), T(3), typemax(T)) : (T(1), T(3), typemax(T))
+            for n in nums, d in (T(1), T(3), typemax(T))
+                iszero(n) && continue
+                @test exponent_holds(n // d)
+            end
+        end
+    end
 end
 
 # We compare to BigFloat instead of hard-coding
